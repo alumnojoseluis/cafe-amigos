@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-title" content="Café Amigos"/>
+  <title>☕ Café Amigos</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg:       #1a0f00;
+      --gold:     #e8c97a;
+      --gold2:    #c8a040;
+      --gold-dim: rgba(232,201,122,0.12);
+      --gold-bdr: rgba(232,201,122,0.28);
+      --text:     #f0e6d3;
+      --muted:    #9c7a50;
+      --card:     rgba(255,255,255,0.04);
+      --green:    #2d6a4f;
+      --green2:   #6fcf97;
+      --red:      #9b2335;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: Georgia, 'Times New Roman', serif;
+      min-height: 100vh;
+      overscroll-behavior: none;
+    }
+
+    /* grain */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      opacity: .35;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+    }
+
+    /* toast */
+    #toast {
+      position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+      padding: 10px 24px; border-radius: 999px; color: #fff;
+      font-family: sans-serif; font-size: .87rem; z-index: 999;
+      box-shadow: 0 4px 24px rgba(0,0,0,.5);
+      white-space: nowrap; display: none;
+      transition: opacity .3s;
+    }
+
+    header {
+      text-align: center;
+      padding: 36px 20px 10px;
+      position: relative; z-index: 1;
+    }
+    header .logo { font-size: 2.8rem; margin-bottom: 6px; }
+    header h1 {
+      font-size: clamp(1.6rem, 5vw, 2.4rem);
+      color: var(--gold);
+      text-shadow: 0 2px 20px rgba(232,201,122,.3);
+      letter-spacing: .02em;
+    }
+    header p.sub {
+      color: var(--muted); font-size: .88rem;
+      margin-top: 6px; font-style: italic;
+    }
+    header p.badge {
+      color: #4a7c5f; font-size: .72rem;
+      margin-top: 5px; font-family: sans-serif;
+    }
+
+    /* export row */
+    .export-row {
+      display: flex; justify-content: center;
+      gap: 8px; margin-top: 14px; flex-wrap: wrap;
+    }
+    .export-row button, .export-row label {
+      background: var(--gold-dim);
+      border: 1px solid rgba(232,201,122,.4);
+      color: var(--gold); padding: 7px 16px;
+      border-radius: 999px; cursor: pointer;
+      font-size: .8rem; font-family: sans-serif;
+      font-weight: 600; display: inline-flex;
+      align-items: center; gap: 5px;
+    }
+    #fileInput { display: none; }
+
+    /* nav */
+    nav {
+      display: flex; flex-wrap: wrap;
+      justify-content: center; gap: 8px;
+      padding: 18px 14px 0;
+      position: relative; z-index: 1;
+    }
+    nav button {
+      background: transparent;
+      border: 1px solid #4a3520;
+      color: var(--muted); padding: 8px 16px;
+      border-radius: 999px; cursor: pointer;
+      font-size: .83rem; font-family: sans-serif;
+      transition: all .2s;
+    }
+    nav button.active {
+      background: #4a3520; color: var(--gold);
+      border-color: #7a5530;
+    }
+    nav button.featured {
+      background: linear-gradient(135deg, var(--gold), var(--gold2));
+      border: none; color: #1a0f00;
+      font-weight: 700; font-size: .88rem;
+      padding: 10px 20px;
+      box-shadow: 0 0 18px rgba(232,201,122,.35);
+    }
+    nav button.featured.active {
+      box-shadow: 0 0 28px rgba(232,201,122,.6);
+    }
+
+    /* main */
+    main {
+      max-width: 560px; margin: 20px auto;
+      padding: 0 14px 80px;
+      position: relative; z-index: 1;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(232,201,122,.15);
+      border-radius: 16px; padding: 22px 18px;
+    }
+
+    .section-title {
+      font-size: 1.05rem; font-weight: 700;
+      color: var(--gold); margin-bottom: 6px;
+      letter-spacing: .04em; font-family: sans-serif;
+    }
+    .hint {
+      font-size: .8rem; color: #7a5a3a;
+      font-family: sans-serif; margin-bottom: 14px;
+      font-style: italic;
+    }
+
+    label.field-label {
+      display: block; font-size: .76rem;
+      color: var(--muted); margin: 16px 0 7px;
+      font-family: sans-serif;
+      text-transform: uppercase; letter-spacing: .08em;
+    }
+
+    .row { display: flex; gap: 8px; margin-bottom: 10px; }
+
+    input[type=text], input[type=date], textarea {
+      flex: 1; background: rgba(255,255,255,.07);
+      border: 1px solid var(--gold-bdr);
+      color: var(--text); padding: 10px 13px;
+      border-radius: 10px; font-size: .93rem;
+      font-family: sans-serif; outline: none;
+      width: 100%;
+    }
+    textarea { resize: vertical; margin-top: 4px; }
+
+    .btn-primary {
+      background: var(--gold); color: #1a0f00;
+      border: none; padding: 10px 15px;
+      border-radius: 10px; cursor: pointer;
+      font-weight: 700; font-size: .88rem;
+      font-family: sans-serif; white-space: nowrap;
+    }
+    .btn-big {
+      display: block; width: 100%; margin-top: 18px;
+      background: linear-gradient(135deg, var(--gold), var(--gold2));
+      color: #1a0f00; border: none; padding: 14px;
+      border-radius: 12px; cursor: pointer;
+      font-weight: 700; font-size: .97rem;
+      font-family: sans-serif; letter-spacing: .03em;
+      box-shadow: 0 4px 18px rgba(200,160,64,.3);
+    }
+
+    /* chips */
+    .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 5px; }
+    .chip {
+      background: var(--gold-dim);
+      border: 1px solid var(--gold-bdr);
+      color: var(--gold); padding: 5px 13px;
+      border-radius: 999px; font-size: .83rem;
+      display: inline-flex; align-items: center;
+      gap: 5px; font-family: sans-serif;
+      cursor: pointer; user-select: none;
+    }
+    .chip.selected {
+      background: var(--gold); color: #1a0f00;
+      border-color: var(--gold); font-weight: 700;
+    }
+    .chip.attend {
+      background: rgba(45,106,79,.4);
+      border-color: var(--green); color: var(--green2);
+    }
+    .chip .x {
+      background: none; border: none;
+      color: var(--gold2); cursor: pointer;
+      font-size: 1rem; padding: 0; line-height: 1;
+    }
+    .empty {
+      color: #5a4030; font-style: italic;
+      font-size: .88rem; font-family: sans-serif;
+    }
+
+    /* stats */
+    .stats-box {
+      margin-top: 16px; padding: 18px;
+      background: rgba(232,201,122,.05);
+      border: 1px solid rgba(232,201,122,.18);
+      border-radius: 12px;
+    }
+    .stats-name {
+      font-size: 1.2rem; color: var(--gold);
+      font-weight: 700; margin-bottom: 14px;
+    }
+    .stats-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px; margin-bottom: 14px;
+    }
+    .stat-item {
+      background: rgba(255,255,255,.05);
+      border-radius: 10px; padding: 11px;
+      text-align: center;
+    }
+    .stat-num {
+      display: block; font-size: 1.85rem;
+      font-weight: 700; color: var(--gold);
+    }
+    .stat-label {
+      display: block; font-size: .68rem;
+      color: var(--muted); font-family: sans-serif;
+      text-transform: uppercase; letter-spacing: .06em;
+      margin-top: 2px;
+    }
+    .subhead {
+      color: var(--gold2); font-size: .8rem;
+      font-family: sans-serif; text-transform: uppercase;
+      letter-spacing: .07em; margin: 13px 0 7px;
+    }
+    ul.detail { list-style: none; }
+    ul.detail li {
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(232,201,122,.08);
+      font-size: .86rem; font-family: sans-serif;
+      color: #d4bea0; display: flex;
+      align-items: center; gap: 6px;
+    }
+    .dot {
+      display: inline-block; width: 6px; height: 6px;
+      border-radius: 50%; background: var(--gold); flex-shrink: 0;
+    }
+
+    /* history */
+    .history-list { display: flex; flex-direction: column; gap: 10px; }
+    .session-card {
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(232,201,122,.13);
+      border-radius: 10px; padding: 11px 14px;
+    }
+    .session-header {
+      display: flex; justify-content: space-between;
+      margin-bottom: 7px;
+    }
+    .session-date { font-size: .76rem; color: var(--muted); font-family: sans-serif; }
+    .session-payer { font-size: .82rem; color: var(--gold); font-weight: 700; font-family: sans-serif; }
+    .session-attendees { display: flex; flex-wrap: wrap; gap: 5px; }
+    .session-notes {
+      margin-top: 7px; font-size: .78rem;
+      color: var(--muted); font-style: italic;
+      font-family: sans-serif;
+    }
+
+    /* hidden tabs */
+    .tab { display: none; }
+    .tab.active { display: block; }
+
+    /* divider */
+    .divider {
+      border: none; border-top: 1px solid rgba(232,201,122,.12);
+      margin: 20px 0;
+    }
+
+    /* restore section */
+    .restore-box {
+      background: rgba(232,201,122,.05);
+      border: 1px dashed rgba(232,201,122,.3);
+      border-radius: 12px; padding: 16px;
+      text-align: center; margin-top: 20px;
+    }
+    .restore-box p {
+      font-size: .8rem; color: var(--muted);
+      font-family: sans-serif; margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<header>
+  <div class="logo">☕</div>
+  <h1>La Ronda del Café</h1>
+  <p class="sub">Quién invita, quién bebe — todo apuntado</p>
+  <p class="badge">💾 Datos guardados en tu móvil automáticamente</p>
+
+  <div class="export-row" id="exportRow" style="display:none">
+    <button onclick="exportExcel()">📊 Exportar Excel</button>
+    <button onclick="exportPDF()">📄 Exportar PDF</button>
+  </div>
+</header>
+
+<nav>
+  <button onclick="showTab('members')" id="tab-members">Registrar</button>
+  <button onclick="showTab('session')" id="tab-session" class="featured">✦ Nueva Sesión</button>
+  <button onclick="showTab('stats')"   id="tab-stats">Consultar</button>
+  <button onclick="showTab('history')" id="tab-history">Historial</button>
+</nav>
+
+<main>
+
+  <!-- REGISTRAR -->
+  <div class="tab card" id="pane-members">
+    <p class="section-title">👥 Grupo de amigos</p>
+    <p class="hint">Añade aquí a los participantes. Solo necesitas hacerlo una vez.</p>
+    <div class="row">
+      <input type="text" id="newMemberInput" placeholder="Nombre del amigo…"
+        onkeydown="if(event.key==='Enter') addMember()"/>
+      <button class="btn-primary" onclick="addMember()">Añadir</button>
+    </div>
+    <div class="chips" id="membersChips"></div>
+
+    <hr class="divider"/>
+
+    <!-- Restaurar copia de seguridad -->
+    <div class="restore-box">
+      <p>¿Cambiaste de móvil o perdiste los datos?<br>Restaura tu copia de seguridad Excel aquí:</p>
+      <label for="fileInput">📂 Cargar copia de seguridad (.xlsx)</label>
+      <input type="file" id="fileInput" accept=".xlsx" onchange="restoreFromExcel(event)"/>
+    </div>
+  </div>
+
+  <!-- NUEVA SESIÓN -->
+  <div class="tab card" id="pane-session">
+    <p class="section-title">✦ Nueva sesión de café</p>
+    <div id="sessionForm">
+      <label class="field-label">Fecha</label>
+      <input type="date" id="sessionDate"/>
+
+      <label class="field-label">¿Quién paga hoy?</label>
+      <div class="chips" id="payerChips"></div>
+
+      <label class="field-label">¿Quién asiste?</label>
+      <div class="chips" id="attendeeChips"></div>
+
+      <label class="field-label">Notas (opcional)</label>
+      <textarea id="sessionNotes" rows="2" placeholder="Ej: Café en la terraza, hacía sol…"></textarea>
+
+      <button class="btn-big" onclick="registerSession()">✦ Confirmar sesión</button>
+    </div>
+    <p class="empty" id="sessionNoMembers" style="display:none">
+      Primero añade al menos 2 amigos en <strong>Registrar</strong>.
+    </p>
+  </div>
+
+  <!-- CONSULTAR -->
+  <div class="tab card" id="pane-stats">
+    <p class="section-title">🔍 Consultar persona</p>
+    <div class="chips" id="statsChips"></div>
+    <div id="statsResult"></div>
+  </div>
+
+  <!-- HISTORIAL -->
+  <div class="tab card" id="pane-history">
+    <p class="section-title">📋 Historial de sesiones</p>
+    <div id="historyList"></div>
+  </div>
+
+</main>
+
+<script>
+// ─── Estado ───────────────────────────────────────────────────────────────────
+let members  = JSON.parse(localStorage.getItem('cafe-members')  || '[]');
+let sessions = JSON.parse(localStorage.getItem('cafe-sessions') || '[]');
+let selectedPayer    = '';
+let selectedAttendees = [];
+let selectedStatPerson = '';
+let currentTab = 'session';
+
+// ─── Persistencia ─────────────────────────────────────────────────────────────
+function save() {
+  localStorage.setItem('cafe-members',  JSON.stringify(members));
+  localStorage.setItem('cafe-sessions', JSON.stringify(sessions));
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = type === 'err' ? '#9b2335' : '#2d6a4f';
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 2600);
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+function showTab(id) {
+  document.querySelectorAll('.tab').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('pane-' + id).classList.add('active');
+  document.getElementById('tab-' + id).classList.add('active');
+  currentTab = id;
+  if (id === 'session') renderSessionForm();
+  if (id === 'stats')   renderStatsChips();
+  if (id === 'history') renderHistory();
+  if (id === 'members') renderMembersChips();
+}
+
+// ─── Miembros ─────────────────────────────────────────────────────────────────
+function addMember() {
+  const input = document.getElementById('newMemberInput');
+  const name  = input.value.trim();
+  if (!name) return;
+  if (members.includes(name)) { toast('Ese nombre ya existe', 'err'); return; }
+  members.push(name);
+  save();
+  input.value = '';
+  renderMembersChips();
+  toast(name + ' añadido al grupo ☕');
+}
+
+function removeMember(name) {
+  members = members.filter(m => m !== name);
+  selectedAttendees = selectedAttendees.filter(a => a !== name);
+  if (selectedPayer === name) selectedPayer = '';
+  save();
+  renderMembersChips();
+  toast(name + ' eliminado');
+}
+
+function renderMembersChips() {
+  const c = document.getElementById('membersChips');
+  if (members.length === 0) {
+    c.innerHTML = '<span class="empty">Sin miembros todavía</span>'; return;
+  }
+  c.innerHTML = members.map(m =>
+    `<span class="chip">${m}
+      <button class="x" onclick="removeMember('${m}')">×</button>
+    </span>`
+  ).join('');
+}
+
+// ─── Nueva Sesión ─────────────────────────────────────────────────────────────
+function renderSessionForm() {
+  const noMembers = members.length < 2;
+  document.getElementById('sessionForm').style.display    = noMembers ? 'none' : 'block';
+  document.getElementById('sessionNoMembers').style.display = noMembers ? 'block' : 'none';
+  if (noMembers) return;
+
+  // Fecha por defecto hoy
+  const di = document.getElementById('sessionDate');
+  if (!di.value) di.value = new Date().toISOString().split('T')[0];
+
+  renderPayerChips();
+  renderAttendeeChips();
+}
+
+function renderPayerChips() {
+  document.getElementById('payerChips').innerHTML = members.map(m =>
+    `<span class="chip ${selectedPayer===m?'selected':''}"
+      onclick="selectPayer('${m}')">${m}</span>`
+  ).join('');
+}
+
+function renderAttendeeChips() {
+  document.getElementById('attendeeChips').innerHTML = members.map(m =>
+    `<span class="chip ${selectedAttendees.includes(m)?'attend':''}"
+      onclick="toggleAttendee('${m}')">${m}</span>`
+  ).join('');
+}
+
+function selectPayer(name) {
+  selectedPayer = selectedPayer === name ? '' : name;
+  renderPayerChips();
+}
+
+function toggleAttendee(name) {
+  if (selectedAttendees.includes(name))
+    selectedAttendees = selectedAttendees.filter(a => a !== name);
+  else
+    selectedAttendees.push(name);
+  renderAttendeeChips();
+}
+
+function registerSession() {
+  if (!selectedPayer)                          { toast('Selecciona quién paga', 'err'); return; }
+  if (selectedAttendees.length < 1)            { toast('Selecciona al menos un asistente', 'err'); return; }
+  if (!selectedAttendees.includes(selectedPayer)) { toast('El que paga debe estar entre los asistentes', 'err'); return; }
+
+  sessions.unshift({
+    id: Date.now(),
+    date: document.getElementById('sessionDate').value,
+    payer: selectedPayer,
+    attendees: [...selectedAttendees],
+    notes: document.getElementById('sessionNotes').value.trim()
+  });
+  save();
+
+  selectedPayer = '';
+  selectedAttendees = [];
+  document.getElementById('sessionNotes').value = '';
+  document.getElementById('sessionDate').value  = new Date().toISOString().split('T')[0];
+  renderPayerChips();
+  renderAttendeeChips();
+  updateExportRow();
+  toast('Sesión registrada y guardada ✓');
+  showTab('history');
+}
+
+// ─── Consultar ────────────────────────────────────────────────────────────────
+function getStats(name) {
+  const attended  = sessions.filter(s => s.attendees.includes(name));
+  const paid      = sessions.filter(s => s.payer === name);
+  const invitedBy = sessions.filter(s => s.payer !== name && s.attendees.includes(name))
+                            .map(s => ({ date: s.date, by: s.payer }));
+  const invited   = paid.flatMap(s =>
+    s.attendees.filter(a => a !== name).map(a => ({ date: s.date, person: a }))
+  );
+  return {
+    coffeesDrunk: attended.length,
+    coffeesPaid:  paid.length,
+    totalInvited: invited.length,
+    invited, invitedBy
+  };
+}
+
+function renderStatsChips() {
+  const c = document.getElementById('statsChips');
+  if (members.length === 0) { c.innerHTML = '<span class="empty">Añade miembros primero.</span>'; return; }
+  c.innerHTML = members.map(m =>
+    `<span class="chip ${selectedStatPerson===m?'selected':''}"
+      onclick="selectStatPerson('${m}')">${m}</span>`
+  ).join('');
+  renderStatsResult();
+}
+
+function selectStatPerson(name) {
+  selectedStatPerson = selectedStatPerson === name ? '' : name;
+  renderStatsChips();
+}
+
+function renderStatsResult() {
+  const r = document.getElementById('statsResult');
+  if (!selectedStatPerson) { r.innerHTML = ''; return; }
+  const st = getStats(selectedStatPerson);
+
+  const invitedMap  = {};
+  st.invited.forEach(i => invitedMap[i.person]  = (invitedMap[i.person]  || 0) + 1);
+  const invitedByMap = {};
+  st.invitedBy.forEach(i => invitedByMap[i.by]  = (invitedByMap[i.by]   || 0) + 1);
+
+  const invitedRows  = Object.entries(invitedMap).map(([p,c]) =>
+    `<li><span class="dot"></span> ${p} — <b>${c}x</b></li>`).join('');
+  const invByRows    = Object.entries(invitedByMap).map(([b,c]) =>
+    `<li><span class="dot"></span> ${b} — <b>${c}x</b></li>`).join('');
+
+  r.innerHTML = `
+    <div class="stats-box">
+      <p class="stats-name">${selectedStatPerson}</p>
+      <div class="stats-grid">
+        <div class="stat-item"><span class="stat-num">${st.coffeesDrunk}</span><span class="stat-label">Cafés tomados</span></div>
+        <div class="stat-item"><span class="stat-num">${st.coffeesPaid}</span><span class="stat-label">Rondas pagadas</span></div>
+        <div class="stat-item"><span class="stat-num">${st.totalInvited}</span><span class="stat-label">Invitaciones hechas</span></div>
+        <div class="stat-item"><span class="stat-num">${st.invitedBy.length}</span><span class="stat-label">Veces invitado</span></div>
+      </div>
+      ${invitedRows  ? `<p class="subhead">Ha invitado a:</p><ul class="detail">${invitedRows}</ul>`  : ''}
+      ${invByRows    ? `<p class="subhead">Le han invitado:</p><ul class="detail">${invByRows}</ul>`  : ''}
+    </div>`;
+}
+
+// ─── Historial ────────────────────────────────────────────────────────────────
+function renderHistory() {
+  const c = document.getElementById('historyList');
+  if (sessions.length === 0) { c.innerHTML = '<p class="empty">No hay sesiones registradas todavía.</p>'; return; }
+  c.innerHTML = `<div class="history-list">` + sessions.map(s => `
+    <div class="session-card">
+      <div class="session-header">
+        <span class="session-date">${s.date}</span>
+        <span class="session-payer">💳 ${s.payer}</span>
+      </div>
+      <div class="session-attendees">
+        ${s.attendees.map(a => `<span class="chip" style="font-size:.75rem;padding:2px 10px">${a}</span>`).join('')}
+      </div>
+      ${s.notes ? `<p class="session-notes">📝 ${s.notes}</p>` : ''}
+    </div>`).join('') + `</div>`;
+}
+
+// ─── Exportar Excel ───────────────────────────────────────────────────────────
+function exportExcel() {
+  const wb = XLSX.utils.book_new();
+
+  // Hoja Historial
+  const hist = sessions.map(s => ({
+    Fecha: s.date, 'Quién pagó': s.payer,
+    Asistentes: s.attendees.join(', '),
+    'Nº cafés': s.attendees.length, Notas: s.notes || ''
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hist), 'Historial');
+
+  // Hoja Estadísticas
+  const stats = members.map(m => {
+    const st = getStats(m);
+    return {
+      Nombre: m, 'Cafés tomados': st.coffeesDrunk, 'Rondas pagadas': st.coffeesPaid,
+      'Invitaciones hechas': st.totalInvited, 'Veces invitado': st.invitedBy.length,
+      'Ha invitado a': [...new Set(st.invited.map(i=>i.person))].join(', '),
+      'Le han invitado': [...new Set(st.invitedBy.map(i=>i.by))].join(', ')
+    };
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stats), 'Estadísticas');
+
+  // Hoja de restauración (datos en bruto para poder restaurar)
+  const raw = {
+    members: JSON.stringify(members),
+    sessions: JSON.stringify(sessions)
+  };
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([raw]), 'Backup');
+
+  XLSX.writeFile(wb, 'cafe-amigos-backup.xlsx');
+  toast('Excel guardado ✓');
+}
+
+// ─── Restaurar desde Excel ────────────────────────────────────────────────────
+function restoreFromExcel(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb   = XLSX.read(e.target.result, { type: 'binary' });
+      const sheet = wb.Sheets['Backup'];
+      if (!sheet) { toast('El archivo no tiene copia de seguridad válida', 'err'); return; }
+      const rows = XLSX.utils.sheet_to_json(sheet);
+      if (!rows[0] || !rows[0].members || !rows[0].sessions) {
+        toast('Formato de copia de seguridad no reconocido', 'err'); return;
+      }
+      const restoredMembers  = JSON.parse(rows[0].members);
+      const restoredSessions = JSON.parse(rows[0].sessions);
+      if (!Array.isArray(restoredMembers) || !Array.isArray(restoredSessions)) {
+        toast('Datos corruptos en la copia de seguridad', 'err'); return;
+      }
+      members  = restoredMembers;
+      sessions = restoredSessions;
+      save();
+      updateExportRow();
+      renderMembersChips();
+      toast('✓ Datos restaurados correctamente (' + sessions.length + ' sesiones, ' + members.length + ' amigos)');
+    } catch(err) {
+      toast('Error al leer el archivo', 'err');
+    }
+  };
+  reader.readAsBinaryString(file);
+  event.target.value = ''; // reset para poder volver a cargar el mismo archivo
+}
+
+// ─── Exportar PDF ─────────────────────────────────────────────────────────────
+function exportPDF() {
+  const rows = sessions.map(s => `<tr>
+    <td>${s.date}</td><td><strong>${s.payer}</strong></td>
+    <td>${s.attendees.join(', ')}</td>
+    <td style="font-style:italic;color:#5a4030">${s.notes||'—'}</td>
+  </tr>`).join('');
+  const stRows = members.map(m => {
+    const st = getStats(m);
+    return `<tr>
+      <td><strong>${m}</strong></td><td>${st.coffeesDrunk}</td><td>${st.coffeesPaid}</td>
+      <td>${[...new Set(st.invited.map(i=>i.person))].join(', ')||'—'}</td>
+      <td>${[...new Set(st.invitedBy.map(i=>i.by))].join(', ')||'—'}</td>
+    </tr>`;
+  }).join('');
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+  <title>Café Amigos</title><style>
+    body{font-family:Georgia,serif;color:#1a0f00;padding:24px;max-width:800px;margin:auto}
+    h1{font-size:1.5rem;border-bottom:2px solid #c8a040;padding-bottom:8px;color:#7a4f00}
+    h2{font-size:1rem;margin-top:26px;color:#7a4f00}
+    table{width:100%;border-collapse:collapse;margin-top:8px;font-size:.83rem}
+    th{background:#f5e6c0;text-align:left;padding:6px 8px;border:1px solid #ccc}
+    td{padding:5px 8px;border:1px solid #ddd;vertical-align:top}
+    tr:nth-child(even) td{background:#fdf8ee}
+    @media print{@page{margin:1.5cm}}
+  </style></head><body>
+  <h1>☕ La Ronda del Café</h1>
+  <p style="color:#9c7a50;font-size:.82rem;font-style:italic">Generado el ${new Date().toLocaleDateString('es-ES')}</p>
+  <h2>Historial</h2>
+  <table><thead><tr><th>Fecha</th><th>Pagó</th><th>Asistentes</th><th>Notas</th></tr></thead>
+  <tbody>${rows||"<tr><td colspan='4'>Sin sesiones</td></tr>"}</tbody></table>
+  <h2>Estadísticas</h2>
+  <table><thead><tr><th>Nombre</th><th>Tomados</th><th>Pagados</th><th>Ha invitado a</th><th>Le han invitado</th></tr></thead>
+  <tbody>${stRows||"<tr><td colspan='5'>Sin datos</td></tr>"}</tbody></table>
+  </body></html>`;
+  const win = window.open('','_blank');
+  if (win) { win.document.write(html); win.document.close(); setTimeout(()=>win.print(), 600); }
+}
+
+// ─── Mostrar/ocultar botones de exportar ──────────────────────────────────────
+function updateExportRow() {
+  document.getElementById('exportRow').style.display = sessions.length > 0 ? 'flex' : 'none';
+}
+
+// ─── Arranque ─────────────────────────────────────────────────────────────────
+updateExportRow();
+showTab('session');
+</script>
+</body>
+</html>
